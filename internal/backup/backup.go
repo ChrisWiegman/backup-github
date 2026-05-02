@@ -13,15 +13,20 @@ import (
 	"github.com/google/go-github/v85/github"
 )
 
-func ExecuteBackup() {
+func ExecuteBackup() error {
 	repos, err := getRepos()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("error encountered in retrieving all repos: %w", err)
 	}
 
 	for _, repo := range repos {
-		_ = cloneRepo(repo)
+		err = backupRepo(repo)
+		if err != nil {
+			return fmt.Errorf("error encountered in backing up repo %s: %w", repo.GetName(), err)
+		}
 	}
+
+	return nil
 }
 
 func getRepos() ([]*github.Repository, error) {
@@ -52,13 +57,14 @@ func getRepos() ([]*github.Repository, error) {
 	return allRepos, nil
 }
 
-func cloneRepo(repo *github.Repository) error {
+func backupRepo(repo *github.Repository) error {
 	currentDirectory, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
 
 	dest := filepath.Join(currentDirectory, "backups", filepath.Base(repo.GetName()))
+
 	cmd := exec.CommandContext( //nolint:gosec // SSH URL is sourced from the authenticated GitHub API, not user input.
 		context.Background(),
 		"git",
@@ -70,6 +76,12 @@ func cloneRepo(repo *github.Repository) error {
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	_, err = os.Stat(dest)
+	if !os.IsNotExist(err) {
+		cmd = exec.Command("git", "remote", "update")
+		cmd.Dir = dest
+	}
 
 	return cmd.Run()
 }

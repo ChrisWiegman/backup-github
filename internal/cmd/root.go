@@ -43,5 +43,9 @@ func runCommand(cmd *cobra.Command, args []string) { //nolint:revive //Passing a
 		os.Exit(0)
 	}
 
-	backup.ExecuteBackup()
+	err := backup.ExecuteBackup()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

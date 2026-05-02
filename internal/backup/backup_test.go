@@ -48,7 +48,7 @@ func TestCloneRepo_Success(t *testing.T) {
 		SSHURL: new(srcDir),
 	}
 
-	if err = cloneRepo(repo); err != nil {
+	if err = backupRepo(repo); err != nil {
 		t.Fatalf("cloneRepo returned error: %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestCloneRepo_InvalidURL(t *testing.T) {
 		SSHURL: new("/this/path/does/not/exist"),
 	}
 
-	if err = cloneRepo(repo); err == nil {
+	if err = backupRepo(repo); err == nil {
 		t.Error("expected error for invalid repo path, got nil")
 	}
 }
