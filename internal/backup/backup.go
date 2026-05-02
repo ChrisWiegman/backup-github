@@ -40,8 +40,7 @@ func getRepos() ([]*github.Repository, error) {
 
 	for {
 		repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(context.Background(), opts)
-		var rateErr *github.AbuseRateLimitError
-		if errors.As(err, &rateErr) {
+		if rateErr, ok := errors.AsType[*github.AbuseRateLimitError](err); ok {
 			return allRepos, fmt.Errorf("hit secondary rate limit, retry after %v", rateErr.RetryAfter)
 		}
 

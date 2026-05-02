@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,7 +69,7 @@ func TestUpdateRepo_Success(t *testing.T) {
 		{"git", "init", srcDir},
 		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
 	} {
-		out, err := exec.Command(args[0], args[1:]...).CombinedOutput() //nolint:gosec
+		out, err := exec.CommandContext(context.Background(), args[0], args[1:]...).CombinedOutput()
 		if err != nil {
 			t.Skipf("git setup failed: %v\n%s", err, out)
 		}
