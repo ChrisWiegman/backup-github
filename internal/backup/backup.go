@@ -14,7 +14,7 @@ import (
 )
 
 func ExecuteBackup() {
-	repos, err := getRepos(client.GetGitHubClient())
+	repos, err := getRepos()
 	if err != nil {
 		panic(err)
 	}
@@ -24,14 +24,17 @@ func ExecuteBackup() {
 	}
 }
 
-func getRepos(client *github.Client) ([]*github.Repository, error) {
+func getRepos() ([]*github.Repository, error) {
+	ghClient := client.GetGitHubClient()
+
 	var allRepos []*github.Repository
+
 	opts := &github.RepositoryListByAuthenticatedUserOptions{
 		Type: "all",
 	}
 
 	for {
-		repos, resp, err := client.Repositories.ListByAuthenticatedUser(context.Background(), opts)
+		repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(context.Background(), opts)
 		var rateErr *github.AbuseRateLimitError
 		if errors.As(err, &rateErr) {
 			return allRepos, fmt.Errorf("hit secondary rate limit, retry after %v", rateErr.RetryAfter)
@@ -56,7 +59,15 @@ func cloneRepo(repo *github.Repository) error {
 	}
 
 	dest := filepath.Join(currentDirectory, "backups", filepath.Base(repo.GetName()))
-	cmd := exec.Command("git", "clone", "--mirror", "--", repo.GetSSHURL(), dest) //nolint:gosec
+	cmd := exec.CommandContext( //nolint:gosec // SSH URL is sourced from the authenticated GitHub API, not user input.
+		context.Background(),
+		"git",
+		"clone",
+		"--mirror",
+		"--",
+		repo.GetSSHURL(),
+		dest,
+	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

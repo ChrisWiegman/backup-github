@@ -17,9 +17,9 @@ func GetGitHubClient() *github.Client {
 func getGitHubAuth() (string, error) {
 	token, err := keyring.Get(serviceName, clientID)
 	if err != nil {
-		host, err := oauth.NewGitHubHost("https://github.com")
-		if err != nil {
-			return "", err
+		host, hostErr := oauth.NewGitHubHost("https://github.com")
+		if hostErr != nil {
+			return "", hostErr
 		}
 
 		flow := &oauth.Flow{
@@ -28,9 +28,9 @@ func getGitHubAuth() (string, error) {
 			Scopes:   []string{"repo", "read:org", "gist"},
 		}
 
-		accessToken, err := flow.DetectFlow()
-		if err != nil {
-			return "", err
+		accessToken, flowErr := flow.DetectFlow()
+		if flowErr != nil {
+			return "", flowErr
 		}
 
 		return accessToken.Token, keyring.Set(serviceName, clientID, accessToken.Token)

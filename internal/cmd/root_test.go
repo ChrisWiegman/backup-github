@@ -42,12 +42,12 @@ func TestExecute_VersionFlag(t *testing.T) {
 	if os.Getenv("TEST_VERSION_SUBPROCESS") == "1" {
 		Version = "2.0.0"
 		Timestamp = "2026-06-01"
-		os.Args = []string{"backup-github", "--version"}
+		os.Args = []string{"backup-github", "--version"} //nolint:reassign //Reassignment is for testing.
 		Execute()
 		return
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestExecute_VersionFlag", "-test.v") //nolint:gosec
+	cmd := exec.Command(os.Args[0], "-test.run=TestExecute_VersionFlag", "-test.v")
 	cmd.Env = append(os.Environ(), "TEST_VERSION_SUBPROCESS=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

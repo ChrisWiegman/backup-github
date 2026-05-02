@@ -10,7 +10,8 @@ import (
 )
 
 var flagVersion bool
-var Version, Timestamp string
+var Version string
+var Timestamp string
 
 type VersionInfo struct {
 	Version, Timestamp string
@@ -34,7 +35,7 @@ func Execute() {
 	}
 }
 
-func runCommand(cmd *cobra.Command, args []string) {
+func runCommand(cmd *cobra.Command, args []string) { //nolint:revive //Passing args is required by Cobra.
 	if cmd.Flags().Lookup("version").Value.String() == "true" {
 		fmt.Printf("Version: %s\n", Version)
 		fmt.Printf("Build Time: %s\n", Timestamp)
