@@ -53,7 +53,7 @@ Repositories are cloned into a `backups/` subdirectory of your current working d
 └── forked-repo/
 ```
 
-Each directory is a bare mirror clone. To update an existing backup, you can run `git remote update` inside any of those directories, or simply re-run `backup-github` (existing clones will error and be skipped while new repositories are cloned).
+Each directory is a bare mirror clone. Re-running `backup-github` will clone any new repositories and update existing ones via `git remote update`.
 
 ### Version information
 
