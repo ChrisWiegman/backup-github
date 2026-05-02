@@ -1,12 +1,17 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ChrisWiegman/backup-github/internal/client"
 
@@ -14,21 +19,49 @@ import (
 )
 
 func ExecuteBackup() error {
-	repos, errCh := getRepos(client.GetGitHubClient())
+	return executeBackup(os.Stdout, client.GetGitHubClient())
+}
 
+func executeBackup(w io.Writer, ghClient *github.Client) error {
+	repos, errCh := getRepos(ghClient)
+
+	var allRepos []*github.Repository
 	for repo := range repos {
-		err := backupRepo(repo)
-		if err != nil {
-			return fmt.Errorf("error encountered in backing up repo %s: %w", repo.GetName(), err)
-		}
+		allRepos = append(allRepos, repo)
 	}
 
-	err := <-errCh
-	if err != nil {
+	if err := <-errCh; err != nil {
 		return fmt.Errorf("error encountered in retrieving all repos: %w", err)
 	}
 
-	return nil
+	total := len(allRepos)
+	const maxConcurrent = 5
+	sem := make(chan struct{}, maxConcurrent)
+
+	var (
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+		counter atomic.Int64
+		errs    []error
+	)
+
+	for _, repo := range allRepos {
+		wg.Add(1)
+		go func(repo *github.Repository) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			if err := backupRepo(w, &mu, &counter, repo, total); err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("error backing up %s: %w", repo.GetName(), err))
+				mu.Unlock()
+			}
+		}(repo)
+	}
+
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 func getRepos( //nolint:gocritic // Names aren't necessary in current context.
@@ -61,7 +94,13 @@ func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 	return reposCh, errCh
 }
 
-func backupRepo(repo *github.Repository) error {
+func backupRepo(
+	w io.Writer,
+	mu *sync.Mutex,
+	counter *atomic.Int64,
+	repo *github.Repository,
+	total int,
+) error {
 	currentDirectory, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
@@ -79,13 +118,26 @@ func backupRepo(repo *github.Repository) error {
 		dest,
 	)
 
-	_, err = os.Stat(dest)
-	if !os.IsNotExist(err) {
+	action := "Cloning"
+
+	if _, err = os.Stat(dest); !os.IsNotExist(err) {
+		action = "Updating"
 		cmd = exec.CommandContext(context.Background(), "git", "-C", dest, "remote", "update")
 	}
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	n := counter.Add(1)
+	mu.Lock()
+	fmt.Fprintf(w, "[%d/%d] %s %s\n", n, total, action, repo.GetName())
+	mu.Unlock()
 
-	return cmd.Run()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err = cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("%w\n%s", err, msg)
+		}
+		return err
+	}
+	return nil
 }

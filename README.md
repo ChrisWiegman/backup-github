@@ -55,6 +55,14 @@ Repositories are cloned into a `backups/` subdirectory of your current working d
 
 Each directory is a bare mirror clone. Re-running `backup-github` will clone any new repositories and update existing ones via `git remote update`.
 
+Progress is printed to the terminal as each repository is processed:
+
+```
+[1/47] Cloning my-new-repo
+[2/47] Updating existing-repo
+[3/47] Updating another-repo
+```
+
 ### Version information
 
 ```sh
