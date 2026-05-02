@@ -1,106 +1,203 @@
-linters-settings:
-  dupl:
-    threshold: 100
-  funlen:
-    lines: 100
-    statements: 50
-  goconst:
-    min-len: 2
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport # https://github.com/go-critic/go-critic/issues/845
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-  gocyclo:
-    min-complexity: 15
-  goimports:
-    local-prefixes: github.com/ChrisWiegman/backup-github
-  mnd:
-    # don't include the "operation" and "assign"
-    checks:
-      - argument
-      - case
-      - condition
-      - return
-    ignored-numbers:
-      - "0"
-      - "1"
-      - "2"
-      - "3"
-    ignored-functions:
-      - strings.SplitN
-
-  govet:
-    shadow: true
-    settings:
-      printf:
-        funcs:
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
-  lll:
-    line-length: 140
-  misspell:
-    locale: US
-  nolintlint:
-    allow-unused: false # report any unused nolint directives
-    require-explanation: false # don't require an explanation for nolint directives
-    require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+version: "2"
 
 linters:
-  disable-all: true
+  default: none
   enable:
-    - bodyclose
-    - dogsled
-    - dupl
-    - errcheck
-    - funlen
-    - gochecknoinits
-    - goconst
-    - gocritic
-    - gocyclo
+    ## Bug detection
+    - asasalint          # checks for pass []any as any in variadic func(...any)
+    - bodyclose          # checks HTTP response body is closed successfully
+    - copyloopvar        # detects loop variable copying (Go 1.22+)
+    - errcheck           # checks for unchecked errors
+    - errname            # checks sentinel errors are prefixed with Err
+    - errorlint          # finds code problematic with Go 1.13 error wrapping
+    - exptostd           # detects golang.org/x/exp functions replaceable by stdlib
+    - fatcontext         # detects nested contexts in loops
+    - govet              # reports suspicious constructs
+    - ineffassign        # detects assignments to variables that are never used
+    - makezero           # finds slice declarations with non-zero initial length
+    - nilerr             # finds code that returns nil even if error is not nil
+    - nilnesserr         # reports err != nil checks that return a different nil value
+    - nilnil             # checks no simultaneous return of nil error and invalid value
+    - staticcheck        # go vet on steroids with extensive static analysis
+    - wastedassign       # finds wasted assignment statements
+
+    ## Security
+    - gosec              # inspects source code for security problems
+
+    ## Style & naming
+    - asciicheck         # checks that code does not contain non-ASCII identifiers
+    - godot              # checks that comments end with a period
+    - goprintffuncname   # checks that printf-like functions are named with f at the end
+    - nakedret           # finds naked returns in functions
+    - nonamedreturns     # reports all named returns
+    - nosprintfhostport  # checks for misuse of Sprintf to construct a host with port
+    - predeclared        # finds code that shadows one of Go's predeclared identifiers
+    - revive             # fast, configurable, extensible replacement for golint
+    - unconvert          # removes unnecessary type conversions
+    - usestdlibvars      # detects the possibility to use stdlib variables/constants
+
+    ## Performance
+    - intrange           # finds places where for loops could use an integer range
+    - mirror             # reports wrong mirror patterns of bytes/strings usage
+    - perfsprint         # checks that fmt.Sprintf can be replaced with a faster alternative
+    - prealloc           # finds slice declarations that could be preallocated
+
+    ## Complexity
+    - cyclop             # checks function and package cyclomatic complexity
+    - funlen             # detects long functions
+    - gocognit           # computes and checks the cognitive complexity of functions
+    - gocyclo            # computes and checks the cyclomatic complexity of functions
+    - nestif             # reports deeply nested if statements
+
+    ## Code quality
+    - bidichk            # checks for dangerous unicode character sequences
+    - dupl               # detects code clone/duplication
+    - gocheckcompilerdirectives # validates go compiler directive comments (//go:)
+    - gochecknoinits     # checks that no init functions are present
+    - goconst            # finds repeated strings that could be replaced by a constant
+    - gocritic           # provides diagnostics for bugs, performance, and style
+    - godox              # detects FIXME, TODO and other comment keywords
+    - mnd                # detects magic numbers
+    - modernize          # suggests simplifications using modern Go language features
+    - musttag            # enforces field tags in (un)marshaled structs
+    - noctx              # finds http requests sent without context.Context
+    - nolintlint         # reports ill-formed or insufficient nolint directives
+    - reassign           # checks that package variables are not reassigned
+    - recvcheck          # checks for receiver type consistency
+    - unparam            # reports unused function parameters
+    - unused             # checks for unused constants, variables, functions and types
+    - whitespace         # detects leading and trailing whitespace
+
+    ## you may want to enable
+    #- exhaustive        # checks exhaustiveness of enum switch statements
+    #- inamedparam       # reports interfaces with unnamed method parameters
+    #- wrapcheck         # checks that errors from external packages are wrapped
+
+  settings:
+    cyclop:
+      max-complexity: 30
+      package-average: 10.0
+
+    dupl:
+      threshold: 100
+
+    errcheck:
+      check-type-assertions: true
+
+    funlen:
+      lines: 100
+      statements: 50
+
+    gocognit:
+      min-complexity: 20
+
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - dupImport # https://github.com/go-critic/go-critic/issues/845
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+      settings:
+        captLocal:
+          paramsOnly: false
+        underef:
+          skipRecvDeref: false
+
+    gocyclo:
+      min-complexity: 15
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # too strict
+      settings:
+        shadow:
+          strict: true
+
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - return
+      ignored-functions:
+        - args.Error
+        - flag.Arg
+        - flag.Duration.*
+        - flag.Float.*
+        - flag.Int.*
+        - flag.Uint.*
+        - os.Chmod
+        - os.Mkdir.*
+        - os.OpenFile
+        - os.WriteFile
+
+    nakedret:
+      max-func-lines: 0
+
+    nolintlint:
+      allow-no-explanation: []
+      require-explanation: true
+      require-specific: true
+
+    perfsprint:
+      strconcat: false
+
+    reassign:
+      patterns:
+        - ".*"
+
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # incorrect or missing package comment
+        - -ST1016 # use consistent method receiver names
+        - -QF1008 # omit embedded fields from selector expression
+
+  exclusions:
+    warn-unused: true
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - source: "TODO"
+        linters: [godot]
+      - text: 'should have a package comment'
+        linters: [revive]
+      - text: 'exported \S+ \S+ should have comment( \(or a comment on this block\))? or be unexported'
+        linters: [revive]
+      - path: '_test\.go'
+        linters:
+          - bodyclose
+          - dupl
+          - errcheck
+          - funlen
+          - goconst
+          - gosec
+          - noctx
+
+formatters:
+  enable:
     - gofmt
     - goimports
-    - mnd
-    - goprintffuncname
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-    - lll
-    - misspell
-    - nakedret
-    - nolintlint
-    - staticcheck
-    - stylecheck
-    - typecheck
-    - unconvert
-    - unparam
-    - unused
-    - whitespace
-    - noctx
-    - asciicheck
-    - godot
-    - godox
-    - prealloc
-    - bidichk
-    - containedctx
-    - contextcheck
-    - decorder
-    - predeclared
-    - reassign
-    - rowserrcheck
-    - usestdlibvars
-    - wastedassign
+    - golines  # replaces lll: auto-fixes long lines rather than just reporting them
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ChrisWiegman/backup-github
+    golines:
+      max-len: 120
+
+issues:
+  max-same-issues: 50
 
 run:
   timeout: 5m
