@@ -1,0 +1,15 @@
+{
+  "name": "backup-github",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChrisWiegman/backup-github.git"
+  },
+  "homepage": "https://github.com/ChrisWiegman/backup-github#readme",
+  "bugs": {
+    "url": "https://github.com/ChrisWiegman/backup-github/issues"
+  },
+  "devDependencies": {
+    "changie": "^1.24.0"
+  }
+}

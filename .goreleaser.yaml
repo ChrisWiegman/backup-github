@@ -1,0 +1,51 @@
+project_name: backup-github
+
+env:
+  - CGO_ENABLED=0
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: macos
+    goos:
+      - darwin
+    main: ./cmd/backup-github/main.go
+    binary: backup-github
+    ldflags:
+      - -s -w -X github.com/ChrisWiegman/backup-github/internal/backup.Version={{.Version}} -X github.com/ChrisWiegman/backup-github/internal/backup.Timestamp={{.Date}}
+
+archives:
+  - id: macos
+    builds:
+      - macos
+    format: zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- if eq .Os "darwin" }}macos
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - LICENSE.txt
+      - CHANGELOG.md
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-devel"
+
+changelog:
+  skip: false
+
+brews:
+  - repository:
+      owner: ChrisWiegman
+      name: homebrew-backup-github
+      branch: main
+    name: backup-github
+    license: MIT
+    test: |
+      system "#{bin}/backup-github --version"
+    homepage: https://github.com/ChrisWiegman/backup-github
+    description: A simple CLI utility, written in GoLang, to backup all of your GitHub repos.
