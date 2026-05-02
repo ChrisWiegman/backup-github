@@ -2,6 +2,10 @@ package backup
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,5 +140,86 @@ func TestCloneRepo_InvalidURL(t *testing.T) {
 
 	if err = backupRepo(repo); err == nil {
 		t.Error("expected error for invalid repo path, got nil")
+	}
+}
+
+func newTestGitHubClient(t *testing.T, mux *http.ServeMux) *github.Client {
+	t.Helper()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	ghClient := github.NewClient(nil)
+	ghClient.BaseURL, _ = url.Parse(server.URL + "/")
+	return ghClient
+}
+
+func TestGetRepos_SinglePage(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) { //nolint:revive //Issue in tests.
+		fmt.Fprint(
+			w,
+			`[{"name":"repo1","ssh_url":"git@github.com:user/repo1.git"},{"name":"repo2","ssh_url":"git@github.com:user/repo2.git"}]`,
+		)
+	})
+
+	reposCh, errCh := getRepos(newTestGitHubClient(t, mux))
+
+	var names []string
+	for repo := range reposCh {
+		names = append(names, repo.GetName())
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(names) != 2 {
+		t.Errorf("expected 2 repos, got %d: %v", len(names), names)
+	}
+}
+
+func TestGetRepos_Paginated(t *testing.T) {
+	mux := http.NewServeMux()
+	var serverURL string
+	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			fmt.Fprint(w, `[{"name":"repo2"}]`)
+		} else {
+			w.Header().Set("Link", fmt.Sprintf(`<%s/user/repos?page=2>; rel="next"`, serverURL))
+			fmt.Fprint(w, `[{"name":"repo1"}]`)
+		}
+	})
+
+	ghClient := newTestGitHubClient(t, mux)
+	serverURL = ghClient.BaseURL.String()
+
+	reposCh, errCh := getRepos(ghClient)
+
+	var names []string
+	for repo := range reposCh {
+		names = append(names, repo.GetName())
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(names) != 2 {
+		t.Errorf("expected 2 repos, got %d: %v", len(names), names)
+	}
+}
+
+func TestGetRepos_RateLimit(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) { //nolint:revive //Issue in tests.
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(
+			w,
+			`{"message":"You have exceeded a secondary rate limit.","documentation_url":"https://docs.github.com/rest/overview/resources-in-the-rest-api#secondary-rate-limits"}`,
+		)
+	})
+
+	_, errCh := getRepos(newTestGitHubClient(t, mux))
+
+	if err := <-errCh; err == nil {
+		t.Error("expected rate limit error, got nil")
 	}
 }

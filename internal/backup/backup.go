@@ -14,46 +14,51 @@ import (
 )
 
 func ExecuteBackup() error {
-	repos, err := getRepos()
-	if err != nil {
-		return fmt.Errorf("error encountered in retrieving all repos: %w", err)
-	}
+	repos, errCh := getRepos(client.GetGitHubClient())
 
-	for _, repo := range repos {
-		err = backupRepo(repo)
+	for repo := range repos {
+		err := backupRepo(repo)
 		if err != nil {
 			return fmt.Errorf("error encountered in backing up repo %s: %w", repo.GetName(), err)
 		}
 	}
 
+	err := <-errCh
+	if err != nil {
+		return fmt.Errorf("error encountered in retrieving all repos: %w", err)
+	}
+
 	return nil
 }
 
-func getRepos() ([]*github.Repository, error) {
-	ghClient := client.GetGitHubClient()
+func getRepos( //nolint:gocritic // Names aren't necessary in current context.
+	ghClient *github.Client,
+) (<-chan *github.Repository, <-chan error) {
+	reposCh := make(chan *github.Repository)
+	errCh := make(chan error, 1)
 
-	var allRepos []*github.Repository
+	go func() {
+		defer close(reposCh)
+		opts := &github.RepositoryListByAuthenticatedUserOptions{Type: "all"}
 
-	opts := &github.RepositoryListByAuthenticatedUserOptions{
-		Type: "all",
-	}
-
-	for {
-		repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(context.Background(), opts)
-		if rateErr, ok := errors.AsType[*github.AbuseRateLimitError](err); ok {
-			return allRepos, fmt.Errorf("hit secondary rate limit, retry after %v", rateErr.RetryAfter)
+		for {
+			repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(context.Background(), opts)
+			if rateErr, ok := errors.AsType[*github.AbuseRateLimitError](err); ok {
+				errCh <- fmt.Errorf("hit secondary rate limit, retry after %v", rateErr.RetryAfter)
+				return
+			}
+			for _, repo := range repos {
+				reposCh <- repo
+			}
+			if resp.NextPage == 0 {
+				break
+			}
+			opts.Page = resp.NextPage
 		}
+		errCh <- nil
+	}()
 
-		allRepos = append(allRepos, repos...)
-
-		if resp.NextPage == 0 {
-			break
-		}
-
-		opts.Page = resp.NextPage
-	}
-
-	return allRepos, nil
+	return reposCh, errCh
 }
 
 func backupRepo(repo *github.Repository) error {
