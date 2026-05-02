@@ -74,14 +74,14 @@ func backupRepo(repo *github.Repository) error {
 		repo.GetSSHURL(),
 		dest,
 	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
 	_, err = os.Stat(dest)
 	if !os.IsNotExist(err) {
-		cmd = exec.Command("git", "remote", "update")
-		cmd.Dir = dest
+		cmd = exec.Command("git", "-C", dest, "remote", "update")
 	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
 }
