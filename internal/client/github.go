@@ -1,6 +1,9 @@
 package client
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/cli/oauth"
 	"github.com/google/go-github/v85/github"
 	"github.com/zalando/go-keyring"
@@ -11,7 +14,8 @@ const serviceName = "Backup GitHub Auth"
 
 func GetGitHubClient() *github.Client {
 	token, _ := getGitHubAuth()
-	return github.NewClient(nil).WithAuthToken(token)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	return github.NewClient(httpClient).WithAuthToken(token)
 }
 
 func getGitHubAuth() (string, error) {

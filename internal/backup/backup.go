@@ -8,10 +8,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/ChrisWiegman/backup-github/internal/client"
 
@@ -19,11 +21,13 @@ import (
 )
 
 func ExecuteBackup() error {
-	return executeBackup(os.Stdout, client.GetGitHubClient())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return executeBackup(ctx, os.Stdout, client.GetGitHubClient())
 }
 
-func executeBackup(w io.Writer, ghClient *github.Client) error {
-	repos, errCh := getRepos(ghClient)
+func executeBackup(ctx context.Context, w io.Writer, ghClient *github.Client) error {
+	repos, errCh := getRepos(ctx, ghClient)
 
 	var allRepos []*github.Repository
 	for repo := range repos {
@@ -49,10 +53,14 @@ func executeBackup(w io.Writer, ghClient *github.Client) error {
 		wg.Add(1)
 		go func(repo *github.Repository) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
 
-			if err := backupRepo(w, &mu, &counter, repo, total); err != nil {
+			if err := backupRepo(ctx, w, &mu, &counter, repo, total); err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("error backing up %s: %w", repo.GetName(), err))
 				mu.Unlock()
@@ -65,6 +73,7 @@ func executeBackup(w io.Writer, ghClient *github.Client) error {
 }
 
 func getRepos( //nolint:gocritic // Names aren't necessary in current context.
+	ctx context.Context,
 	ghClient *github.Client,
 ) (<-chan *github.Repository, <-chan error) {
 	reposCh := make(chan *github.Repository)
@@ -75,9 +84,13 @@ func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 		opts := &github.RepositoryListByAuthenticatedUserOptions{Type: "all"}
 
 		for {
-			repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(context.Background(), opts)
-			if rateErr, ok := errors.AsType[*github.AbuseRateLimitError](err); ok {
-				errCh <- fmt.Errorf("hit secondary rate limit, retry after %v", rateErr.RetryAfter)
+			repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(ctx, opts)
+			if err != nil {
+				if rateErr, ok := errors.AsType[*github.AbuseRateLimitError](err); ok {
+					errCh <- fmt.Errorf("hit secondary rate limit, retry after %v", rateErr.RetryAfter)
+				} else {
+					errCh <- err
+				}
 				return
 			}
 			for _, repo := range repos {
@@ -95,6 +108,7 @@ func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 }
 
 func backupRepo(
+	ctx context.Context,
 	w io.Writer,
 	mu *sync.Mutex,
 	counter *atomic.Int64,
@@ -109,7 +123,7 @@ func backupRepo(
 	dest := filepath.Join(currentDirectory, "backups", filepath.Base(repo.GetName()))
 
 	cmd := exec.CommandContext( //nolint:gosec // SSH URL is sourced from the authenticated GitHub API, not user input.
-		context.Background(),
+		ctx,
 		"git",
 		"clone",
 		"--mirror",
@@ -122,7 +136,7 @@ func backupRepo(
 
 	if _, err = os.Stat(dest); !os.IsNotExist(err) {
 		action = "Updating"
-		cmd = exec.CommandContext(context.Background(), "git", "-C", dest, "remote", "update")
+		cmd = exec.CommandContext(ctx, "git", "-C", dest, "remote", "update")
 	}
 
 	n := counter.Add(1)
