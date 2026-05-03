@@ -318,7 +318,10 @@ func TestGetRepos_VerboseLogging(t *testing.T) {
 	serverURL = ghClient.BaseURL.String()
 
 	var verboseBuf bytes.Buffer
-	_, errCh := getRepos(context.Background(), ghClient, &verboseBuf)
+	reposCh, errCh := getRepos(context.Background(), ghClient, &verboseBuf)
+
+	for range reposCh { //nolint:revive //This is needed to prevent hanging tests.
+	}
 
 	if err := <-errCh; err != nil {
 		t.Fatalf("unexpected error: %v", err)
