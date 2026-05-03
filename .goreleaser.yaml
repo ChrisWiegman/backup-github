@@ -1,5 +1,7 @@
 project_name: backup-github
 
+version: 2
+
 env:
   - CGO_ENABLED=0
 
@@ -18,9 +20,10 @@ builds:
 
 archives:
   - id: macos
-    builds:
+    ids:
       - macos
-    format: zip
+    formats:
+      - zip
     name_template: >-
       {{ .ProjectName }}_
       {{- if eq .Os "darwin" }}macos
@@ -33,19 +36,23 @@ archives:
       - CHANGELOG.md
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-devel"
+  version_template: "{{ incpatch .Version }}-devel"
 
 changelog:
-  skip: false
+  disable: false
 
-brews:
+homebrew_casks:
   - repository:
       owner: ChrisWiegman
       name: homebrew-backup-github
       branch: main
     name: backup-github
     license: MIT
-    test: |
-      system "#{bin}/backup-github --version"
     homepage: https://github.com/ChrisWiegman/backup-github
     description: A simple CLI utility, written in GoLang, to backup all of your GitHub repos.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/backup-github"]
+          end
