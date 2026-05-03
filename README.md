@@ -46,13 +46,21 @@ backup-github
 
 On first run you will be prompted to authenticate with GitHub via OAuth. The token is saved to your system keyring so subsequent runs do not require re-authentication.
 
-Repositories are cloned into a `backups/` subdirectory of your current working directory:
+By default, repositories are cloned into the current working directory:
 
 ```
-./backups/
+./
 ├── my-repo/
 ├── another-repo/
 └── forked-repo/
+```
+
+Use `--output-dir` to specify a different destination — absolute, relative, or home-relative paths are all supported:
+
+```sh
+backup-github --output-dir ~/backups
+backup-github --output-dir /mnt/external/github
+backup-github --output-dir backups
 ```
 
 Each directory is a bare mirror clone. Re-running `backup-github` will clone any new repositories and update existing ones via `git remote update`.
@@ -69,6 +77,7 @@ Progress is printed to the terminal as each repository is processed:
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
+| `--output-dir` | `-o` | current directory | Directory to write backups into (absolute, relative, or `~/…`) |
 | `--verbose` | `-v` | `false` | Enable verbose (detailed) output |
 
 ### Commands
