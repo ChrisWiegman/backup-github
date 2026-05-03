@@ -1,3 +1,0 @@
-kind: Bug Fixes
-body: Fixed the application locking due to improper usage of context after moving to goroutines.
-time: 2026-05-02T19:30:12.806356-05:00
