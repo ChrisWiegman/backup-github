@@ -26,3 +26,17 @@ func TestRootCommand_Subcommands(t *testing.T) {
 		}
 	}
 }
+
+func TestRootCommand_VerboseFlag(t *testing.T) {
+	cmd := rootCommand()
+	flag := cmd.PersistentFlags().Lookup("verbose")
+	if flag == nil {
+		t.Fatal("rootCommand missing --verbose persistent flag")
+	}
+	if flag.Shorthand != "v" {
+		t.Errorf("verbose flag shorthand = %q, want \"v\"", flag.Shorthand)
+	}
+	if flag.DefValue != "false" {
+		t.Errorf("verbose flag default = %q, want \"false\"", flag.DefValue)
+	}
+}

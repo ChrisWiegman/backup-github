@@ -60,7 +60,15 @@ func TestCloneRepo_Success(t *testing.T) {
 		SSHURL: new(srcDir),
 	}
 
-	if err = backupRepo(context.Background(), io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1); err != nil {
+	if err = backupRepo(
+		context.Background(),
+		io.Discard,
+		io.Discard,
+		&sync.Mutex{},
+		&atomic.Int64{},
+		repo,
+		1,
+	); err != nil {
 		t.Fatalf("cloneRepo returned error: %v", err)
 	}
 
@@ -107,12 +115,28 @@ func TestUpdateRepo_Success(t *testing.T) {
 	}
 
 	// First call: clone the repo.
-	if err = backupRepo(context.Background(), io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1); err != nil {
+	if err = backupRepo(
+		context.Background(),
+		io.Discard,
+		io.Discard,
+		&sync.Mutex{},
+		&atomic.Int64{},
+		repo,
+		1,
+	); err != nil {
 		t.Fatalf("initial backupRepo returned error: %v", err)
 	}
 
 	// Second call: destination already exists, should run remote update instead.
-	if err = backupRepo(context.Background(), io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1); err != nil {
+	if err = backupRepo(
+		context.Background(),
+		io.Discard,
+		io.Discard,
+		&sync.Mutex{},
+		&atomic.Int64{},
+		repo,
+		1,
+	); err != nil {
 		t.Fatalf("update backupRepo returned error: %v", err)
 	}
 
@@ -131,8 +155,69 @@ func TestCloneRepo_InvalidURL(t *testing.T) {
 		SSHURL: new("/this/path/does/not/exist"),
 	}
 
-	if err := backupRepo(context.Background(), io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1); err == nil {
+	if err := backupRepo(
+		context.Background(),
+		io.Discard,
+		io.Discard,
+		&sync.Mutex{},
+		&atomic.Int64{},
+		repo,
+		1,
+	); err == nil {
 		t.Error("expected error for invalid repo path, got nil")
+	}
+}
+
+func TestBackupRepo_VerboseOutput(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available in PATH")
+	}
+
+	srcDir := t.TempDir()
+	for _, args := range [][]string{
+		{"git", "init", srcDir},
+		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			t.Skipf("git setup failed: %v\n%s", err, out)
+		}
+	}
+
+	destDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chdir(destDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err = os.Chdir(orig); err != nil {
+			t.Errorf("failed to restore working directory: %v", err)
+		}
+	})
+
+	repo := &github.Repository{
+		Name:   new("test-repo"),
+		SSHURL: new(srcDir),
+	}
+
+	var verboseBuf bytes.Buffer
+	if err = backupRepo(
+		context.Background(),
+		io.Discard,
+		&verboseBuf,
+		&sync.Mutex{},
+		&atomic.Int64{},
+		repo,
+		1,
+	); err != nil {
+		t.Fatalf("backupRepo returned error: %v", err)
+	}
+
+	if !strings.Contains(verboseBuf.String(), "Running: ") {
+		t.Errorf("expected git command in verbose output, got: %s", verboseBuf.String())
 	}
 }
 
@@ -154,7 +239,7 @@ func TestGetRepos_SinglePage(t *testing.T) {
 		)
 	})
 
-	reposCh, errCh := getRepos(context.Background(), newTestGitHubClient(t, mux))
+	reposCh, errCh := getRepos(context.Background(), newTestGitHubClient(t, mux), io.Discard)
 
 	var names []string
 	for repo := range reposCh {
@@ -184,7 +269,7 @@ func TestGetRepos_Paginated(t *testing.T) {
 	ghClient := newTestGitHubClient(t, mux)
 	serverURL = ghClient.BaseURL.String()
 
-	reposCh, errCh := getRepos(context.Background(), ghClient)
+	reposCh, errCh := getRepos(context.Background(), ghClient, io.Discard)
 
 	var names []string
 	for repo := range reposCh {
@@ -210,10 +295,41 @@ func TestGetRepos_RateLimit(t *testing.T) {
 		)
 	})
 
-	_, errCh := getRepos(context.Background(), newTestGitHubClient(t, mux))
+	_, errCh := getRepos(context.Background(), newTestGitHubClient(t, mux), io.Discard)
 
 	if err := <-errCh; err == nil {
 		t.Error("expected rate limit error, got nil")
+	}
+}
+
+func TestGetRepos_VerboseLogging(t *testing.T) {
+	mux := http.NewServeMux()
+	var serverURL string
+	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			fmt.Fprint(w, `[{"name":"repo2"}]`)
+		} else {
+			w.Header().Set("Link", fmt.Sprintf(`<%s/user/repos?page=2>; rel="next"`, serverURL))
+			fmt.Fprint(w, `[{"name":"repo1"}]`)
+		}
+	})
+
+	ghClient := newTestGitHubClient(t, mux)
+	serverURL = ghClient.BaseURL.String()
+
+	var verboseBuf bytes.Buffer
+	_, errCh := getRepos(context.Background(), ghClient, &verboseBuf)
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := verboseBuf.String()
+	if !strings.Contains(output, "page 1") {
+		t.Errorf("expected page 1 in verbose output, got: %s", output)
+	}
+	if !strings.Contains(output, "page 2") {
+		t.Errorf("expected page 2 in verbose output, got: %s", output)
 	}
 }
 
@@ -254,7 +370,7 @@ func TestExecuteBackup_Progress(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	if err = executeBackup(context.Background(), &buf, ghClient); err != nil {
+	if err = executeBackup(context.Background(), &buf, io.Discard, ghClient); err != nil {
 		t.Fatalf("executeBackup returned error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "[1/1] Cloning repo1") {
@@ -262,10 +378,60 @@ func TestExecuteBackup_Progress(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err = executeBackup(context.Background(), &buf, ghClient); err != nil {
+	if err = executeBackup(context.Background(), &buf, io.Discard, ghClient); err != nil {
 		t.Fatalf("second executeBackup returned error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "[1/1] Updating repo1") {
 		t.Errorf("expected Updating progress line, got: %s", buf.String())
+	}
+}
+
+func TestExecuteBackup_VerboseOutput(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available in PATH")
+	}
+
+	srcDir := t.TempDir()
+	for _, args := range [][]string{
+		{"git", "init", srcDir},
+		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			t.Skipf("git setup failed: %v\n%s", err, out)
+		}
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) { //nolint:revive //Issue in tests.
+		fmt.Fprintf(w, `[{"name":"repo1","ssh_url":%q}]`, srcDir)
+	})
+	ghClient := newTestGitHubClient(t, mux)
+
+	destDir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chdir(destDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err = os.Chdir(orig); err != nil {
+			t.Errorf("failed to restore working directory: %v", err)
+		}
+	})
+
+	var verboseBuf bytes.Buffer
+	if err = executeBackup(context.Background(), io.Discard, &verboseBuf, ghClient); err != nil {
+		t.Fatalf("executeBackup returned error: %v", err)
+	}
+
+	output := verboseBuf.String()
+	if !strings.Contains(output, "Found 1 repos to backup") {
+		t.Errorf("expected repo count in verbose output, got: %s", output)
+	}
+	if !strings.Contains(output, "Running: ") {
+		t.Errorf("expected git command in verbose output, got: %s", output)
 	}
 }

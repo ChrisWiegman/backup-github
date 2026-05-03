@@ -20,14 +20,20 @@ import (
 	"github.com/google/go-github/v85/github"
 )
 
-func ExecuteBackup() error {
+func ExecuteBackup(verbose bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return executeBackup(ctx, os.Stdout, client.GetGitHubClient())
+
+	verboseW := io.Discard
+	if verbose {
+		verboseW = os.Stdout
+	}
+
+	return executeBackup(ctx, os.Stdout, verboseW, client.GetGitHubClient(verboseW))
 }
 
-func executeBackup(ctx context.Context, w io.Writer, ghClient *github.Client) error {
-	repos, errCh := getRepos(ctx, ghClient)
+func executeBackup(ctx context.Context, w, verboseW io.Writer, ghClient *github.Client) error {
+	repos, errCh := getRepos(ctx, ghClient, verboseW)
 
 	var allRepos []*github.Repository
 	for repo := range repos {
@@ -39,6 +45,8 @@ func executeBackup(ctx context.Context, w io.Writer, ghClient *github.Client) er
 	}
 
 	total := len(allRepos)
+	fmt.Fprintf(verboseW, "Found %d repos to backup\n", total)
+
 	const maxConcurrent = 5
 	sem := make(chan struct{}, maxConcurrent)
 
@@ -60,7 +68,7 @@ func executeBackup(ctx context.Context, w io.Writer, ghClient *github.Client) er
 			}
 			defer func() { <-sem }()
 
-			if err := backupRepo(ctx, w, &mu, &counter, repo, total); err != nil {
+			if err := backupRepo(ctx, w, verboseW, &mu, &counter, repo, total); err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("error backing up %s: %w", repo.GetName(), err))
 				mu.Unlock()
@@ -75,6 +83,7 @@ func executeBackup(ctx context.Context, w io.Writer, ghClient *github.Client) er
 func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 	ctx context.Context,
 	ghClient *github.Client,
+	verboseW io.Writer,
 ) (<-chan *github.Repository, <-chan error) {
 	reposCh := make(chan *github.Repository)
 	errCh := make(chan error, 1)
@@ -82,8 +91,11 @@ func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 	go func() {
 		defer close(reposCh)
 		opts := &github.RepositoryListByAuthenticatedUserOptions{Type: "all"}
+		pageNum := 1
 
 		for {
+			fmt.Fprintf(verboseW, "Fetching page %d of repositories...\n", pageNum)
+
 			repos, resp, err := ghClient.Repositories.ListByAuthenticatedUser(ctx, opts)
 			if err != nil {
 				if rateErr, ok := errors.AsType[*github.AbuseRateLimitError](err); ok {
@@ -100,6 +112,7 @@ func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 				break
 			}
 			opts.Page = resp.NextPage
+			pageNum++
 		}
 		errCh <- nil
 	}()
@@ -109,7 +122,7 @@ func getRepos( //nolint:gocritic // Names aren't necessary in current context.
 
 func backupRepo(
 	ctx context.Context,
-	w io.Writer,
+	w, verboseW io.Writer,
 	mu *sync.Mutex,
 	counter *atomic.Int64,
 	repo *github.Repository,
@@ -144,8 +157,10 @@ func backupRepo(
 	fmt.Fprintf(w, "[%d/%d] %s %s\n", n, total, action, repo.GetName())
 	mu.Unlock()
 
+	fmt.Fprintf(verboseW, "Running: %s\n", cmd.String())
+
 	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	cmd.Stderr = io.MultiWriter(&stderr, verboseW)
 
 	if err = cmd.Run(); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {

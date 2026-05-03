@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/ChrisWiegman/backup-github/internal/backup"
+	"github.com/ChrisWiegman/backup-github/internal/flags"
 
 	"github.com/spf13/cobra"
 )
@@ -25,6 +26,8 @@ func rootCommand() *cobra.Command {
 		RunE:  runCommand,
 	}
 
+	flags.AddVerboseFlag(cmd)
+
 	cmd.AddCommand(
 		versionCommand(),
 		logoutCommand(),
@@ -34,5 +37,5 @@ func rootCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error { //nolint:revive //Passing args is required by Cobra.
-	return backup.ExecuteBackup()
+	return backup.ExecuteBackup(flags.Verbose)
 }
