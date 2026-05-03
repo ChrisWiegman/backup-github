@@ -40,7 +40,7 @@ func TestCloneRepo_Success(t *testing.T) {
 	}
 
 	destDir := t.TempDir()
-	mirrorPath := filepath.Join(destDir, "backups", "test-repo")
+	mirrorPath := filepath.Join(destDir, "test-repo")
 
 	orig, err := os.Getwd()
 	if err != nil {
@@ -68,6 +68,8 @@ func TestCloneRepo_Success(t *testing.T) {
 		&atomic.Int64{},
 		repo,
 		1,
+		"",
+		false,
 	); err != nil {
 		t.Fatalf("cloneRepo returned error: %v", err)
 	}
@@ -94,7 +96,7 @@ func TestUpdateRepo_Success(t *testing.T) {
 	}
 
 	destDir := t.TempDir()
-	mirrorPath := filepath.Join(destDir, "backups", "test-repo")
+	mirrorPath := filepath.Join(destDir, "test-repo")
 
 	orig, err := os.Getwd()
 	if err != nil {
@@ -123,6 +125,8 @@ func TestUpdateRepo_Success(t *testing.T) {
 		&atomic.Int64{},
 		repo,
 		1,
+		"",
+		false,
 	); err != nil {
 		t.Fatalf("initial backupRepo returned error: %v", err)
 	}
@@ -136,6 +140,8 @@ func TestUpdateRepo_Success(t *testing.T) {
 		&atomic.Int64{},
 		repo,
 		1,
+		"",
+		false,
 	); err != nil {
 		t.Fatalf("update backupRepo returned error: %v", err)
 	}
@@ -163,6 +169,8 @@ func TestCloneRepo_InvalidURL(t *testing.T) {
 		&atomic.Int64{},
 		repo,
 		1,
+		"",
+		false,
 	); err == nil {
 		t.Error("expected error for invalid repo path, got nil")
 	}
@@ -212,6 +220,8 @@ func TestBackupRepo_VerboseOutput(t *testing.T) {
 		&atomic.Int64{},
 		repo,
 		1,
+		"",
+		false,
 	); err != nil {
 		t.Fatalf("backupRepo returned error: %v", err)
 	}
@@ -373,7 +383,7 @@ func TestExecuteBackup_Progress(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	if err = executeBackup(context.Background(), &buf, io.Discard, ghClient); err != nil {
+	if err = executeBackup(context.Background(), &buf, io.Discard, ghClient, "", false); err != nil {
 		t.Fatalf("executeBackup returned error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "[1/1] Cloning repo1") {
@@ -381,7 +391,7 @@ func TestExecuteBackup_Progress(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err = executeBackup(context.Background(), &buf, io.Discard, ghClient); err != nil {
+	if err = executeBackup(context.Background(), &buf, io.Discard, ghClient, "", false); err != nil {
 		t.Fatalf("second executeBackup returned error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "[1/1] Updating repo1") {
@@ -426,7 +436,7 @@ func TestExecuteBackup_VerboseOutput(t *testing.T) {
 	})
 
 	var verboseBuf bytes.Buffer
-	if err = executeBackup(context.Background(), io.Discard, &verboseBuf, ghClient); err != nil {
+	if err = executeBackup(context.Background(), io.Discard, &verboseBuf, ghClient, "", false); err != nil {
 		t.Fatalf("executeBackup returned error: %v", err)
 	}
 
@@ -436,5 +446,213 @@ func TestExecuteBackup_VerboseOutput(t *testing.T) {
 	}
 	if !strings.Contains(output, "Running: ") {
 		t.Errorf("expected git command in verbose output, got: %s", output)
+	}
+}
+
+func TestBackupRepo_OutputDir_NoCwd(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available in PATH")
+	}
+
+	srcDir := t.TempDir()
+	for _, args := range [][]string{
+		{"git", "init", srcDir},
+		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			t.Skipf("git setup failed: %v\n%s", err, out)
+		}
+	}
+
+	repo := &github.Repository{Name: new("test-repo"), SSHURL: new(srcDir)}
+	destDir := t.TempDir()
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chdir(destDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err = os.Chdir(orig); err != nil {
+			t.Errorf("failed to restore working directory: %v", err)
+		}
+	})
+
+	if err = backupRepo(
+		context.Background(), io.Discard, io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1, "", false,
+	); err != nil {
+		t.Fatalf("backupRepo returned error: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(destDir, "test-repo")); os.IsNotExist(err) {
+		t.Errorf("expected clone in cwd, not found")
+	}
+}
+
+func TestBackupRepo_OutputDir_Absolute(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available in PATH")
+	}
+
+	srcDir := t.TempDir()
+	for _, args := range [][]string{
+		{"git", "init", srcDir},
+		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			t.Skipf("git setup failed: %v\n%s", err, out)
+		}
+	}
+
+	repo := &github.Repository{Name: new("test-repo"), SSHURL: new(srcDir)}
+	destDir := t.TempDir()
+
+	if err := backupRepo(
+		context.Background(), io.Discard, io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1, destDir, true,
+	); err != nil {
+		t.Fatalf("backupRepo returned error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "test-repo")); os.IsNotExist(err) {
+		t.Errorf("expected clone at absolute path, not found")
+	}
+}
+
+func TestBackupRepo_OutputDir_Relative(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available in PATH")
+	}
+
+	srcDir := t.TempDir()
+	for _, args := range [][]string{
+		{"git", "init", srcDir},
+		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			t.Skipf("git setup failed: %v\n%s", err, out)
+		}
+	}
+
+	repo := &github.Repository{Name: new("test-repo"), SSHURL: new(srcDir)}
+	destDir := t.TempDir()
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chdir(destDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err = os.Chdir(orig); err != nil {
+			t.Errorf("failed to restore working directory: %v", err)
+		}
+	})
+
+	if err = backupRepo(
+		context.Background(), io.Discard, io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1, "backups", true,
+	); err != nil {
+		t.Fatalf("backupRepo returned error: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(destDir, "backups", "test-repo")); os.IsNotExist(err) {
+		t.Errorf("expected clone at relative path, not found")
+	}
+}
+
+func TestBackupRepo_OutputDir_HomeRelative(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available in PATH")
+	}
+
+	srcDir := t.TempDir()
+	for _, args := range [][]string{
+		{"git", "init", srcDir},
+		{"git", "-C", srcDir, "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		if err != nil {
+			t.Skipf("git setup failed: %v\n%s", err, out)
+		}
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("could not determine home directory")
+	}
+
+	repo := &github.Repository{Name: new("test-repo"), SSHURL: new(srcDir)}
+	subDir := filepath.Join(homeDir, "backup-github-test-HomeRelative")
+	t.Cleanup(func() { os.RemoveAll(subDir) })
+
+	if err = backupRepo(
+		context.Background(), io.Discard, io.Discard, &sync.Mutex{}, &atomic.Int64{}, repo, 1,
+		"~/backup-github-test-HomeRelative", true,
+	); err != nil {
+		t.Fatalf("backupRepo returned error: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(subDir, "test-repo")); os.IsNotExist(err) {
+		t.Errorf("expected clone at home-relative path, not found")
+	}
+}
+
+func TestGetOutputDir(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("could not determine home directory")
+	}
+
+	const currentDir = "/some/current/dir"
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "home-relative with slash",
+			input: "~/backups",
+			want:  filepath.Join(homeDir, "backups"),
+		},
+		{
+			name:  "home-relative without slash",
+			input: "~backups",
+			want:  filepath.Join(homeDir, "backups"),
+		},
+		{
+			name:  "absolute path",
+			input: "/absolute/path",
+			want:  "/absolute/path",
+		},
+		{
+			name:  "relative path",
+			input: "backups",
+			want:  filepath.Join(currentDir, "backups"),
+		},
+		{
+			name:  "dot-relative path",
+			input: "./backups",
+			want:  filepath.Join(currentDir, "backups"),
+		},
+		{
+			name:  "parent-relative path",
+			input: "../backups",
+			want:  "/some/current/backups",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got string
+			got, err = getOutputDir(currentDir, tt.input)
+			if err != nil {
+				t.Fatalf("getOutputDir returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

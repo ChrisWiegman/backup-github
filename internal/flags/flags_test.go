@@ -56,6 +56,67 @@ func TestAddVerboseFlag_ShortFlag(t *testing.T) {
 	}
 }
 
+func TestAddOutputFlag_RegistersFlag(t *testing.T) {
+	cmd := newTestCommand()
+	AddOutputFlag(cmd)
+
+	f := cmd.Flags().Lookup("output-dir")
+	if f == nil {
+		t.Fatal("expected --output-dir flag to be registered")
+	}
+	if f.Shorthand != "o" {
+		t.Errorf("expected shorthand 'o', got %q", f.Shorthand)
+	}
+	if f.DefValue != "" {
+		t.Errorf("expected empty default value, got %q", f.DefValue)
+	}
+}
+
+func TestAddOutputFlag_LongFlag(t *testing.T) {
+	OutputDir = ""
+	t.Cleanup(func() { OutputDir = "" })
+
+	cmd := newTestCommand()
+	AddOutputFlag(cmd)
+
+	if err := cmd.ParseFlags([]string{"--output-dir", "/tmp/backups"}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if OutputDir != "/tmp/backups" {
+		t.Errorf("expected OutputDir to be '/tmp/backups', got %q", OutputDir)
+	}
+}
+
+func TestAddOutputFlag_ShortFlag(t *testing.T) {
+	OutputDir = ""
+	t.Cleanup(func() { OutputDir = "" })
+
+	cmd := newTestCommand()
+	AddOutputFlag(cmd)
+
+	if err := cmd.ParseFlags([]string{"-o", "/tmp/backups"}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if OutputDir != "/tmp/backups" {
+		t.Errorf("expected OutputDir to be '/tmp/backups', got %q", OutputDir)
+	}
+}
+
+func TestAddOutputFlag_DefaultEmpty(t *testing.T) {
+	OutputDir = ""
+	t.Cleanup(func() { OutputDir = "" })
+
+	cmd := newTestCommand()
+	AddOutputFlag(cmd)
+
+	if err := cmd.ParseFlags([]string{}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if OutputDir != "" {
+		t.Errorf("expected OutputDir to remain empty when flag is not passed, got %q", OutputDir)
+	}
+}
+
 func TestAddVerboseFlag_DefaultFalse(t *testing.T) {
 	Verbose = false
 	t.Cleanup(func() { Verbose = false })
