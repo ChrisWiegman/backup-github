@@ -20,7 +20,7 @@ import (
 	"github.com/google/go-github/v85/github"
 )
 
-func ExecuteBackup(verbose bool) error {
+func ExecuteBackup(verbose bool, outputDir string, hasOutputDir bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -29,10 +29,16 @@ func ExecuteBackup(verbose bool) error {
 		verboseW = os.Stdout
 	}
 
-	return executeBackup(ctx, os.Stdout, verboseW, client.GetGitHubClient(verboseW))
+	return executeBackup(ctx, os.Stdout, verboseW, client.GetGitHubClient(verboseW), outputDir, hasOutputDir)
 }
 
-func executeBackup(ctx context.Context, w, verboseW io.Writer, ghClient *github.Client) error {
+func executeBackup(
+	ctx context.Context,
+	w, verboseW io.Writer,
+	ghClient *github.Client,
+	outputDir string,
+	hasOutputDir bool,
+) error {
 	repos, errCh := getRepos(ctx, ghClient, verboseW)
 
 	var allRepos []*github.Repository
@@ -68,7 +74,7 @@ func executeBackup(ctx context.Context, w, verboseW io.Writer, ghClient *github.
 			}
 			defer func() { <-sem }()
 
-			if err := backupRepo(ctx, w, verboseW, &mu, &counter, repo, total); err != nil {
+			if err := backupRepo(ctx, w, verboseW, &mu, &counter, repo, total, outputDir, hasOutputDir); err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("error backing up %s: %w", repo.GetName(), err))
 				mu.Unlock()
@@ -127,13 +133,23 @@ func backupRepo(
 	counter *atomic.Int64,
 	repo *github.Repository,
 	total int,
+	outputDir string,
+	hasOutputDir bool,
 ) error {
 	currentDirectory, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
 
-	dest := filepath.Join(currentDirectory, "backups", filepath.Base(repo.GetName()))
+	dest := currentDirectory
+	if hasOutputDir {
+		dest, err = getOutputDir(currentDirectory, outputDir)
+		if err != nil {
+			return err
+		}
+	}
+
+	dest = filepath.Join(dest, filepath.Base(repo.GetName()))
 
 	cmd := exec.CommandContext( //nolint:gosec // SSH URL is sourced from the authenticated GitHub API, not user input.
 		ctx,
@@ -169,4 +185,21 @@ func backupRepo(
 		return err
 	}
 	return nil
+}
+
+func getOutputDir(currentDirectory, outputDir string) (string, error) {
+	if strings.HasPrefix(outputDir, "~") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("could not determine user's home directory: %w", err)
+		}
+
+		return filepath.Join(homeDir, strings.TrimPrefix(outputDir, "~")), nil
+	}
+
+	if strings.HasPrefix(outputDir, "/") {
+		return outputDir, nil
+	}
+
+	return filepath.Join(currentDirectory, outputDir), nil
 }
