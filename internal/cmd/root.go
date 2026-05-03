@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/ChrisWiegman/backup-github/internal/backup"
@@ -9,43 +8,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var flagVersion bool
-var Version string
-var Timestamp string
+func Execute() {
+	cmd := rootCommand()
 
-type VersionInfo struct {
-	Version, Timestamp string
+	err := cmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
 }
 
-func Execute() {
-	// Set up the cobra command
+func rootCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "backup-github",
+		Use:   "backup-github", //nolint:goconst //Additional usages are in testing.
 		Short: "Backup GitHub is a simple script to backup all your GitHub repos.",
 		Args:  cobra.MaximumNArgs(1),
-		Run:   runCommand,
+		RunE:  runCommand,
 	}
 
-	cmd.PersistentFlags().BoolVarP(&flagVersion, "version", "v", false, "Display version information for the app.")
+	cmd.AddCommand(
+		versionCommand(),
+		logoutCommand(),
+	)
 
-	// Execute anything we need to
-	if err := cmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	return cmd
 }
 
-func runCommand(cmd *cobra.Command, args []string) { //nolint:revive //Passing args is required by Cobra.
-	if cmd.Flags().Lookup("version").Value.String() == "true" {
-		fmt.Printf("Version: %s\n", Version)
-		fmt.Printf("Build Time: %s\n", Timestamp)
-
-		os.Exit(0)
-	}
-
-	err := backup.ExecuteBackup()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+func runCommand(cmd *cobra.Command, args []string) error { //nolint:revive //Passing args is required by Cobra.
+	return backup.ExecuteBackup()
 }

@@ -18,6 +18,10 @@ func GetGitHubClient() *github.Client {
 	return github.NewClient(httpClient).WithAuthToken(token)
 }
 
+func LogoutGitHub() error {
+	return keyring.Delete(serviceName, clientID)
+}
+
 func getGitHubAuth() (string, error) {
 	token, err := keyring.Get(serviceName, clientID)
 	if err != nil {
