@@ -5,9 +5,11 @@ A simple CLI tool to back up all of your GitHub repositories as local mirror clo
 ## Features
 
 - Backs up all repositories (public, private, and forks) for your authenticated GitHub account
-- Uses `git clone --mirror` to create complete mirror clones including all branches and refs
+- Uses `git clone --mirror` to create complete mirror clones including all branches, tags, and refs
 - Stores OAuth tokens securely in your system keyring; no config files with plain-text credentials
 - Handles GitHub API pagination automatically
+- Runs up to 5 repository operations concurrently
+- Handles `SIGTERM` and `SIGINT` (Control+C) gracefully
 
 ## Prerequisites
 
@@ -63,11 +65,28 @@ Progress is printed to the terminal as each repository is processed:
 [3/47] Updating another-repo
 ```
 
-### Version information
+### Flags
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--verbose` | `-v` | `false` | Enable verbose (detailed) output |
+
+### Commands
+
+#### `backup-github version`
+
+Display the current version and build time:
 
 ```sh
-backup-github --version
-backup-github -v
+backup-github version
+```
+
+#### `backup-github logout`
+
+Remove the stored GitHub OAuth token from your system keyring. The next run of `backup-github` will prompt you to reauthenticate.
+
+```sh
+backup-github logout
 ```
 
 ## GitHub OAuth permissions
