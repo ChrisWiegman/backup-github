@@ -27,6 +27,7 @@ func rootCommand() *cobra.Command {
 	}
 
 	flags.AddVerboseFlag(cmd)
+	flags.AddOutputFlag(cmd)
 
 	cmd.AddCommand(
 		versionCommand(),
@@ -37,5 +38,5 @@ func rootCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error { //nolint:revive //Passing args is required by Cobra.
-	return backup.ExecuteBackup(flags.Verbose)
+	return backup.ExecuteBackup(flags.Verbose, flags.OutputDir, cmd.Flags().Lookup("output-dir").Changed)
 }
