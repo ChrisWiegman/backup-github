@@ -2,5 +2,6 @@ vendor/
 dist/
 node_modules/
 backups/
+.claude/
 
 .DS_Store
