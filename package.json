@@ -10,6 +10,6 @@
     "url": "https://github.com/ChrisWiegman/backup-github/issues"
   },
   "devDependencies": {
-    "changie": "^1.25.1"
+    "changie": "^1.26.0"
   }
 }
