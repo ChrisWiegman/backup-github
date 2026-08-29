@@ -15,7 +15,7 @@ type VersionInfo struct {
 
 func versionCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "version", //nolint:goconst //Additional usages are in testing.
+		Use:   "version",
 		Short: "Displays version information for the Backup GitHub script.",
 		Run: func(cmd *cobra.Command, args []string) { //nolint:revive //Parameters are required by Cobra.
 			fmt.Printf("Version: %s\n", Version)

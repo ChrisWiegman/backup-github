@@ -10,7 +10,7 @@ import (
 
 func logoutCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "logout", //nolint:goconst //Additional usages are in testing.
+		Use:   "logout",
 		Short: "Logs the user out of GitHub. You'll need to login again when next running the app.",
 		RunE: func(cmd *cobra.Command, args []string) error { //nolint:revive //Parameters are required by Cobra.
 			err := client.LogoutGitHub()

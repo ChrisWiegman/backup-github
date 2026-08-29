@@ -20,7 +20,7 @@ func Execute() {
 
 func rootCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "backup-github", //nolint:goconst //Additional usages are in testing.
+		Use:   "backup-github",
 		Short: "Backup GitHub is a simple script to backup all your GitHub repos.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runCommand,

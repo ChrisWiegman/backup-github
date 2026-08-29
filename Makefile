@@ -28,12 +28,14 @@ install:
 		-ldflags "-s -w -X $(PKG)/internal/backup.Version=$(VERSION) -X $(PKG)/internal/backup.Timestamp=$(TIMESTAMP)" \
 		./cmd/...
 
+GOLANGCI_LINT := $(shell go env GOPATH)/bin/golangci-lint
+
 .PHONY: lint
 lint:
-	@if [ ! -f $GOPATH/bin/golangci-lint ]; then \
-		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest;\
+	@if [ ! -f $(GOLANGCI_LINT) ]; then \
+		GOBIN=$(shell go env GOPATH)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest;\
 	fi
-	@golangci-lint \
+	@$(GOLANGCI_LINT) \
 			run
 
 .PHONY: test
