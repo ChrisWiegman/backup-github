@@ -50,7 +50,9 @@ homebrew_casks:
     license: MIT
     homepage: https://github.com/ChrisWiegman/backup-github
     description: A simple CLI utility, written in GoLang, to backup all of your GitHub repos.
-    custom_block: |
-      postflight_steps do
-        run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/backup-github"]
-      end
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/backup-github"]
+          end
