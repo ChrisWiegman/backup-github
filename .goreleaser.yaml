@@ -52,7 +52,7 @@ homebrew_casks:
     description: A simple CLI utility, written in GoLang, to backup all of your GitHub repos.
     hooks:
       post:
-        install: |
+        install_steps: |
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/backup-github"]
           end
