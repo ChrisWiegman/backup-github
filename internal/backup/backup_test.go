@@ -330,7 +330,7 @@ func TestGetRepos_VerboseLogging(t *testing.T) {
 	var verboseBuf bytes.Buffer
 	reposCh, errCh := getRepos(context.Background(), ghClient, &verboseBuf)
 
-	for range reposCh { //nolint:revive //This is needed to prevent hanging tests.
+	for range reposCh {
 	}
 
 	if err := <-errCh; err != nil {
