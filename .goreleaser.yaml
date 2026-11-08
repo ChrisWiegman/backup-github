@@ -54,5 +54,5 @@ homebrew_casks:
       post:
         install_steps: |
           run "/usr/bin/xattr",
-              args:           ["-dr", "com.apple.quarantine", "{{staged_path}}/backup-github"],
-              writable_paths: ["{{staged_path}}/backup-github"]
+              args:           ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/backup-github"],
+              writable_paths: ["{{ "{{staged_path}}" }}/backup-github"]
