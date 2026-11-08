@@ -53,6 +53,6 @@ homebrew_casks:
     hooks:
       post:
         install_steps: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/backup-github"]
-          end
+          run "/usr/bin/xattr",
+              args:           ["-dr", "com.apple.quarantine", "{{staged_path}}/backup-github"],
+              writable_paths: ["{{staged_path}}/backup-github"]
